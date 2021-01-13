@@ -1,0 +1,12 @@
+{
+    "api_key": "GOOGLE API KEY",
+    "calendars": [
+        {
+            "calendar_id": "CALENDAR_ID",
+            "discord_info": {
+                "webhook_url": "WEBHOOK_URL_HERE",
+                "color": "#ffff00"
+            }
+        }
+    ]
+}
