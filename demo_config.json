@@ -1,10 +1,27 @@
 {
-    "api_key": "GOOGLE API KEY",
+    "api_key": "API_KEY",
     "calendars": [
         {
             "calendar_id": "CALENDAR_ID",
+            "notifications": [1440, 4320],
+            "timezones": [
+                {
+                    "name": "US",
+                    "utc_offset": -5
+                },
+                {
+                    "name": "UK",
+                    "utc_offset": 0
+                },
+                {
+                    "name": "NL",
+                    "utc_offset": 1
+                }
+            ],
             "discord_info": {
-                "webhook_url": "WEBHOOK_URL_HERE",
+                "bot_name": "Optional Bot Name",
+                "bot_icon": "Optional Bot Icon",
+                "webhook_url": "WEBHOOK_URL",
                 "color": "#ffff00"
             }
         }

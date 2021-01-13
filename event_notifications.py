@@ -4,39 +4,19 @@ import datetime
 import math
 import asyncio
 import os
+from json import JSONDecodeError
 
 cwd = os.getcwd()
-config_file = open(str(cwd) + "\config.json", 'r')
 config_json = json.loads("{}")
 
-try:
-    config_json = json.loads(config_file.read())
-except:
-    print("No config found. Check github for example config and populate your config.json file")
-    exit(0)
 
-##CURRENTLY TRANSFERRING ALL WEBHOOK AND CALENDAR INFO INTO A CONFIG FILE
+def is_json_key_present(json, key):
+    try:
+        buf = json[key]
+    except KeyError:
+        return False
 
-calendar_id = ""
-webhook_url = ""
-api_key = config_json['api_key']
-
-minutes_before_notify = [1440, 4320]
-
-timezones = [
-    {
-        "name": "US",
-        "utc_offset": -5
-    },
-    {
-        "name": "UK",
-        "utc_offset": 0
-    },
-    {
-        "name": "NL",
-        "utc_offset": 1
-    }
-]
+    return True
 
 
 def get_time_until_string(minutes_until):
@@ -55,84 +35,111 @@ def get_time_until_string(minutes_until):
         return str(minutes_until) + " minute(s)"
 
 
+try:
+    with open(str(cwd) + "\config.json", 'r') as config_file:
+        config_json = json.loads(config_file.read())
+except IOError:
+    open(str(cwd) + "\config.json", "a+")
+    print("No config found. Check github for example config and populate your config.json file")
+    exit(0)
+except JSONDecodeError:
+    print("invalid config. Check github for example config and populate your config.json file")
+    exit(0)
+
+api_key = config_json['api_key']
+
 async def do_loop():
+    calendars = config_json['calendars']
+
+    if len(calendars) == 0:
+        print("No calendars found in the config. Check github for example config and populate your config.json file")
+        exit(0)
+
     while True:
-        try:
-            result = requests.request('GET', 'https://www.googleapis.com/calendar/v3/calendars/' + str(
-                calendar_id) + '/events?key=' + str(api_key))
-            json_response = json.loads(result.content)
+        for calendar in calendars:
+            cal_id = calendar['calendar_id']
+            notification_times = calendar['notifications']
+            timezones = calendar['timezones']
+            discord_info = calendar['discord_info']
 
-            testing = False
+            try:
+                result = requests.request('GET', 'https://www.googleapis.com/calendar/v3/calendars/' + str(cal_id) + '/events?key=' + str(api_key))
+                json_response = json.loads(result.content)
 
-            events = json_response['items']
+                events = json_response['items']
 
-            for event in events:
-                name = event['summary']
-                link = event['htmlLink']
+                for event in events:
+                    name = event['summary']
+                    link = event['htmlLink']
 
-                start_raw = event['start']['dateTime']
-                end_raw = event['end']['dateTime']
+                    start_raw = event['start']['dateTime']
+                    end_raw = event['end']['dateTime']
 
-                if start_raw.endswith("Z"):
-                    start_raw = start_raw.replace("Z", "+00:00")
+                    if start_raw.endswith("Z"):
+                        start_raw = start_raw.replace("Z", "+00:00")
 
-                if end_raw.endswith("Z"):
-                    end_raw = end_raw.replace("Z", "+00:00")
+                    if end_raw.endswith("Z"):
+                        end_raw = end_raw.replace("Z", "+00:00")
 
-                start = datetime.datetime.fromisoformat(start_raw)
-                end = datetime.datetime.fromisoformat(end_raw)
-                now = datetime.datetime.now(tz=start.tzinfo)
+                    start = datetime.datetime.fromisoformat(start_raw)
+                    end = datetime.datetime.fromisoformat(end_raw)
+                    now = datetime.datetime.now(tz=start.tzinfo)
 
-                duration = end - start
-                duration_text = str(duration)
+                    duration = end - start
+                    duration_text = str(duration)
 
-                if start < now:
-                    continue
+                    if start < now:
+                        continue
 
-                date_different = start - now
-                minutes_diff = math.floor((date_different.total_seconds() / 60))
+                    date_different = start - now
+                    minutes_diff = math.floor((date_different.total_seconds() / 60))
 
-                print("check at " + now.strftime("%a %d %B %Y, %H:%M") + " - minutes diff is " + str(minutes_diff))
+                    print(str(name) + " in " + str(minutes_diff) + " minutes")
 
-                if minutes_diff in minutes_before_notify or testing:
-                    start_time_value = ""
+                    if minutes_diff in notification_times:
+                        start_time_value = ""
 
-                    for timezone in timezones:
-                        to_add = datetime.timedelta(hours=timezone['utc_offset'])
-                        this_zone_time = start + to_add
+                        for timezone in timezones:
+                            to_add = datetime.timedelta(hours=timezone['utc_offset'])
+                            this_zone_time = start + to_add
 
-                        start_time_value += str(timezone['name']) + " - " + this_zone_time.strftime(
-                            "%a %d %B %Y, %H:%M") + "\n"
+                            start_time_value += str(timezone['name']) + " - " + this_zone_time.strftime("%a %d %B %Y, %H:%M") + "\n"
 
-                    how_long_message = str(get_time_until_string(minutes_diff))
+                        how_long_message = str(get_time_until_string(minutes_diff))
 
-                    webhook_body = {
-                        "embeds": [
-                            {
-                                "title": name + " in " + how_long_message,
-                                "url": link,
-                                "color": 0xffff00,
-                                "timestamp": start.isoformat(),
-                                "fields": [
-                                    {
-                                        "name": "Start Time(s)",
-                                        "value": start_time_value,
-                                        "inline": False
-                                    },
-                                    {
-                                        "name": "Duration",
-                                        "value": duration_text,
-                                        "inline": "False"
-                                    }
-                                ]
-                            }
-                        ]
-                    }
+                        webhook_body = {
+                            "embeds": [
+                                {
+                                    "title": name + " in " + how_long_message,
+                                    "url": link,
+                                    "color": int(discord_info['color'][1:], 16),
+                                    "timestamp": start.isoformat(),
+                                    "fields": [
+                                        {
+                                            "name": "Start Time(s)",
+                                            "value": start_time_value,
+                                            "inline": False
+                                        },
+                                        {
+                                            "name": "Duration",
+                                            "value": duration_text,
+                                            "inline": "False"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
 
-                    send = requests.request('POST', webhook_url, json=webhook_body)
-                    print(str(send.status_code) + " " + str(send.content))
-        except Exception as e:
-            print(str(e))
+                        if is_json_key_present(discord_info, 'bot_name'):
+                            webhook_body['username'] = discord_info['bot_name']
+
+                        if is_json_key_present(discord_info, 'bot_icon'):
+                            webhook_body['avatar_url'] = discord_info['bot_icon']
+
+                        send = requests.request('POST', discord_info['webhook_url'], json=webhook_body)
+                        print(str(send.status_code) + " " + str(send.content))
+            except Exception as e:
+                print(str(e))
 
         await asyncio.sleep(60)
 
