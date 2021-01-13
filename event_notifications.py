@@ -9,6 +9,8 @@ from json import JSONDecodeError
 cwd = os.getcwd()
 config_json = json.loads("{}")
 
+config_path = str(cwd) + "/config.json"
+print("config at " + config_path)
 
 def is_json_key_present(json, key):
     try:
@@ -36,10 +38,10 @@ def get_time_until_string(minutes_until):
 
 
 try:
-    with open(str(cwd) + "\config.json", 'r') as config_file:
+    with open(config_path, 'r') as config_file:
         config_json = json.loads(config_file.read())
 except IOError:
-    open(str(cwd) + "\config.json", "a+")
+    open(config_path, "a+")
     print("No config found. Check github for example config and populate your config.json file")
     exit(0)
 except JSONDecodeError:
